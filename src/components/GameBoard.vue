@@ -93,38 +93,35 @@ export default {
             }
         },
         handleKeyDown(e) {
-            // 阻止方向键的默认行为（页面滚动）
-            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+            // 区分真实事件和AI模拟事件
+            const isRealEvent = e instanceof Event;
+            const key = isRealEvent ? e.key : e;
+
+            // 仅对真实事件阻止默认行为
+            if (isRealEvent && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
                 e.preventDefault();
             }
 
+            // 使用统一按键处理逻辑
+            this.processMove(key);
+        },
+        processMove(direction) {
             if (this.gameOver) return;
 
             let moved = false;
             const oldBoard = JSON.parse(JSON.stringify(this.board));
 
-            switch (e.key) {
-                case 'ArrowUp':
-                    moved = this.moveUp();
-                    break;
-                case 'ArrowDown':
-                    moved = this.moveDown();
-                    break;
-                case 'ArrowLeft':
-                    moved = this.moveLeft();
-                    break;
-                case 'ArrowRight':
-                    moved = this.moveRight();
-                    break;
-                default:
-                    return;
+            switch (direction) {
+                case 'ArrowUp': moved = this.moveUp(); break;
+                case 'ArrowDown': moved = this.moveDown(); break;
+                case 'ArrowLeft': moved = this.moveLeft(); break;
+                case 'ArrowRight': moved = this.moveRight(); break;
+                default: return;
             }
 
             if (moved) {
                 this.addRandomTile();
-                if (this.isGameOver()) {
-                    this.gameOver = true;
-                }
+                if (this.isGameOver()) this.gameOver = true;
             }
         },
         moveUp() {
@@ -340,30 +337,22 @@ export default {
             return moved;
         },
 
-        // ✅ 添加调试日志
         startAI() {
-            console.log(`启动AI模式: ${this.aiMode}`);
             this.aiInterval = setInterval(() => {
-                if (this.aiPaused || this.gameOver) {
-                    console.log('AI暂停或游戏结束');
-                    return;
-                }
+                if (this.aiPaused || this.gameOver) return;
 
                 const move = this.aiMove();
                 console.log(`AI选择移动方向: ${move}`);
 
                 if (move) {
-                    this.handleKeyDown({ key: move });
-                    this.aiSteps++;
-                    this.$forceUpdate(); // ✅ 强制视图更新
+                    // 直接传递方向而非模拟事件对象
+                    this.processMove(move);
 
-                    // 检查是否达到2048（Flash模式自动暂停）
+                    // 检查2048目标
                     if (this.aiMode === 'flash' && Math.max(...this.board.flat()) >= 2048) {
                         this.aiPaused = true;
-                        console.log('达到2048，自动暂停');
                     }
                 } else {
-                    console.log('没有有效移动，停止AI');
                     this.stopAI();
                 }
             }, this.aiMode === 'flash' ? 100 : 500);
