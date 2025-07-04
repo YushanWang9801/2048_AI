@@ -14,17 +14,7 @@
             <button @click="toggleAIPlay('flash')" class="ai-btn">
                 {{ isAIPlaying && aiMode === 'flash' ? 'Pause Flash' : 'AI Flash' }}
             </button>
-            <button v-if="isAIPlaying" @click="stopAI" class="ai-btn stop-btn">
-                Stop
-            </button>
-            <div v-if="isAIPlaying" class="ai-status">
-                AI: {{ aiPaused ? 'Paused' : 'Running' }}
-                <button @click="aiPaused = !aiPaused" class="ai-btn">
-                    {{ aiPaused ? 'Resume' : 'Pause' }}
-                </button>
-            </div>
         </div>
-
         <div class="game-board">
             <div v-for="(row, rowIndex) in board" :key="rowIndex" class="row">
                 <div v-for="(cell, colIndex) in row" :key="colIndex" class="cell" :class="`cell-${cell || ''}`">
@@ -256,28 +246,74 @@ export default {
         evaluateBoard(board) {
             let score = 0;
 
-            // 1. 空格数量（权重：10）
-            const emptyCells = board.flat().filter(cell => cell === 0).length;
-            score += emptyCells * 10;
+            const flat = board.flat();
+            const emptyCells = flat.filter(cell => cell === 0).length;
+            const maxValue = Math.max(...flat);
 
-            // 2. 最大数值位置（权重：1000）
-            const maxValue = Math.max(...board.flat());
-            const cornerPositions = [[3, 0], [3, 3], [0, 3], [0, 0]]; // 优先角落位置
-            if (cornerPositions.some(([x, y]) => board[x][y] === maxValue)) {
-                score += 1000;
-            }
+            const cornerPositions = [[3, 0], [3, 3], [0, 3], [0, 0]];
+            const maxInCorner = cornerPositions.some(([x, y]) => board[x][y] === maxValue);
 
-            // 3. 单调性评估（权重：5）
-            for (let i = 0; i < 4; i++) {
-                for (let j = 0; j < 3; j++) {
-                    // 横向单调性
-                    if (board[i][j] >= board[i][j + 1]) score += 5;
-                    // 纵向单调性
-                    if (board[j][i] >= board[j + 1][i]) score += 5;
-                }
-            }
+            // 新策略组合加权
+            score += emptyCells * 100; // 提高空格的权重
+            score += maxInCorner ? 1000 : 0;
+            score += this.evaluateSmoothness(board) * 10;
+            score += this.evaluateMergingPotential(board);
+            score += this.evaluateMonotonicity(board) * 5;
 
             return score;
+        },
+        evaluateMonotonicity(board) {
+            let monoScore = 0;
+            for (let i = 0; i < 4; i++) {
+                let row = board[i];
+                let inc = 0, dec = 0;
+                for (let j = 0; j < 3; j++) {
+                    if (row[j] > row[j + 1]) dec += row[j] - row[j + 1];
+                    else inc += row[j + 1] - row[j];
+                }
+                monoScore += Math.max(inc, dec);
+            }
+
+            for (let j = 0; j < 4; j++) {
+                let col = [board[0][j], board[1][j], board[2][j], board[3][j]];
+                let inc = 0, dec = 0;
+                for (let i = 0; i < 3; i++) {
+                    if (col[i] > col[i + 1]) dec += col[i] - col[i + 1];
+                    else inc += col[i + 1] - col[i];
+                }
+                monoScore += Math.max(inc, dec);
+            }
+
+            return -monoScore;
+        },
+        evaluateMergingPotential(board) {
+            let merges = 0;
+            for (let i = 0; i < 4; i++) {
+                for (let j = 0; j < 3; j++) {
+                    if (board[i][j] && board[i][j] === board[i][j + 1]) merges++;
+                    if (board[j][i] && board[j][i] === board[j + 1][i]) merges++;
+                }
+            }
+            return merges * 50; // 权重可调
+        },
+        evaluateSmoothness(board) {
+            let smoothness = 0;
+            for (let i = 0; i < 4; i++) {
+                for (let j = 0; j < 3; j++) {
+                    const current = board[i][j];
+                    const right = board[i][j + 1];
+                    const down = board[j][i];
+                    const below = board[j + 1] ? board[j + 1][i] : 0;
+
+                    if (current && right) {
+                        smoothness -= Math.abs(Math.log2(current) - Math.log2(right));
+                    }
+                    if (down && below) {
+                        smoothness -= Math.abs(Math.log2(down) - Math.log2(below));
+                    }
+                }
+            }
+            return smoothness;
         },
         simulateMoveUp(board) {
             let moved = false;
@@ -293,7 +329,6 @@ export default {
             }
             return moved;
         },
-
         simulateMoveDown(board) {
             let moved = false;
             for (let j = 0; j < 4; j++) {
@@ -309,7 +344,6 @@ export default {
             }
             return moved;
         },
-
         simulateMoveLeft(board) {
             let moved = false;
             for (let i = 0; i < 4; i++) {
@@ -322,7 +356,6 @@ export default {
             }
             return moved;
         },
-
         simulateMoveRight(board) {
             let moved = false;
             for (let i = 0; i < 4; i++) {
@@ -336,7 +369,6 @@ export default {
             }
             return moved;
         },
-
         startAI() {
             this.aiInterval = setInterval(() => {
                 if (this.aiPaused || this.gameOver) return;
@@ -357,7 +389,6 @@ export default {
                 }
             }, this.aiMode === 'flash' ? 100 : 500);
         },
-
         toggleAIPlay(mode) {
             console.log(`切换AI模式: ${mode}`);
             if (this.isAIPlaying && this.aiMode === mode) {
@@ -371,7 +402,6 @@ export default {
                 this.startAI();
             }
         },
-
         stopAI() {
             console.log('停止AI');
             clearInterval(this.aiInterval);
@@ -384,248 +414,208 @@ export default {
 </script>
 
 <style scoped>
-.game-container {
-    max-width: 500px;
-    margin: 0 auto;
-    text-align: center;
-    font-family: Arial, sans-serif;
-    color: black;
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Arial', sans-serif;
 }
 
+body {
+  background-color: #faf8ef;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+/* 主游戏容器 */
+.game-container {
+  width: 90%;
+  max-width: 500px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+/* 标题样式 */
+h1 {
+  color: #776e65;
+  font-size: calc(2rem + 1.5vw);
+  margin-bottom: 20px;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+}
+
+/* 游戏信息栏（分数+按钮） */
 .game-info {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 15px;
+  flex-wrap: wrap;
 }
 
 .score {
-    font-size: 1.5em;
-    font-weight: bold;
+  background-color: #bbada0;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: calc(1.2rem + 0.5vw);
+  font-weight: bold;
+  min-width: 120px;
 }
 
-h1 {
-    color: black;
+.reset-btn, .ai-btn {
+  padding: 10px 20px;
+  background-color: #8f7a66;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background 0.3s;
+  font-size: 1rem;
+}
+.reset-btn:hover, .ai-btn:hover {
+  background-color: #9f8b77;
 }
 
-.reset-btn {
-    padding: 8px 16px;
-    background-color: #8f7a66;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 1em;
-}
-
-.reset-btn:hover {
-    background-color: #9f8b77;
-}
-
-.game-board {
-    background-color: #bbada0;
-    border-radius: 6px;
-    padding: 15px;
-    position: relative;
-    width: 445px;
-    /* 固定宽度 */
-    height: 445px;
-    /* 固定高度，与宽度相同 */
-    margin: 0 auto;
-    /* 居中 */
-}
-
-.cell {
-    width: 100px;
-    height: 100px;
-    margin-right: 15px;
-    margin-bottom: 15px;
-    background-color: #cdc1b4;
-    border-radius: 4px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 2em;
-    font-weight: bold;
-    color: #776e65;
-    float: left;
-    /* 让单元格浮动排列 */
-}
-
-.row {
-    display: block;
-    /* 改为block布局 */
-    clear: both;
-    /* 清除浮动 */
-    margin-bottom: 0;
-    /* 移除底部间距 */
-}
-
-.row:last-child {
-    margin-bottom: 0;
-}
-
-.cell:last-child {
-    margin-right: 0;
-}
-
-.cell-2 {
-    background-color: #eee4da;
-}
-
-.cell-4 {
-    background-color: #ede0c8;
-}
-
-.cell-8 {
-    background-color: #f2b179;
-    color: white;
-}
-
-.cell-16 {
-    background-color: #f59563;
-    color: white;
-}
-
-.cell-32 {
-    background-color: #f67c5f;
-    color: white;
-}
-
-.cell-64 {
-    background-color: #f65e3b;
-    color: white;
-}
-
-.cell-128 {
-    background-color: #edcf72;
-    color: white;
-    font-size: 1.8em;
-}
-
-.cell-256 {
-    background-color: #edcc61;
-    color: white;
-    font-size: 1.8em;
-}
-
-.cell-512 {
-    background-color: #edc850;
-    color: white;
-    font-size: 1.8em;
-}
-
-.cell-1024 {
-    background-color: #edc53f;
-    color: white;
-    font-size: 1.5em;
-}
-
-.cell-2048 {
-    background-color: #edc22e;
-    color: white;
-    font-size: 1.5em;
-}
-
-.cell-4096 {
-    background-color: #977811;
-    color: white;
-    font-size: 1.5em;
-}
-
-.cell-8192 {
-    background-color: #503e03;
-    color: white;
-    font-size: 1.5em;
-}
-
-.cell-16384 {
-    background-color: #c3761e;
-    color: white;
-    font-size: 1.5em;
-}
-
-.game-over {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(238, 228, 218, 0.73);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    border-radius: 6px;
-}
-
-.game-over h2 {
-    font-size: 2em;
-    color: #776e65;
-    margin-bottom: 20px;
-}
-
-.game-rules {
-    background-color: #faf8ef;
-    padding: 10px;
-    border-radius: 5px;
-    margin-bottom: 15px;
-    font-size: 0.9em;
-    color: #776e65;
-}
-
-.scores {
-    display: flex;
-    gap: 15px;
-}
-
-.score,
-.high-score {
-    background-color: #bbada0;
-    color: white;
-    padding: 5px 10px;
-    border-radius: 3px;
-    font-weight: bold;
-}
-
+/* AI控制区域 */
 .ai-controls {
-    margin: 15px 0;
-    padding: 10px;
-    background-color: #faf8ef;
-    border-radius: 6px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    justify-content: center;
-}
-
-.ai-btn {
-    padding: 8px 15px;
-    background-color: #8f7a66;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.9em;
-    transition: background-color 0.3s;
-}
-
-.ai-btn:hover {
-    background-color: #9f8b77;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin: 20px 0;
+  padding: 15px;
+  background-color: rgba(185, 173, 161, 0.2);
+  border-radius: 8px;
 }
 
 .stop-btn {
-    background-color: #d9534f;
+  background-color: #d9534f;
 }
-
 .stop-btn:hover {
-    background-color: #c9302c;
+  background-color: #c9302c;
 }
 
 .ai-status {
-    display: flex;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: #776e65;
+}
+
+/* 游戏棋盘 */
+.game-board {
+  background-color: #bbada0;
+  border-radius: 6px;
+  padding: 10px;
+  width: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.row {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.cell {
+  width: calc(25% - 10px);
+  max-width: 100px;
+  height: calc(25vw - 30px);
+  max-height: 100px;
+  flex-shrink: 0; /* 防止单元格收缩 */
+  background-color: #cdc1b4;
+  border-radius: 4px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: calc(1.5rem + 1.5vw);
+  font-weight: bold;
+  transition: transform 0.1s, background 0.3s;
+}
+
+/* 数字瓷砖颜色 */
+.cell-2 { background-color: #eee4da; color: #776e65; }
+.cell-4 { background-color: #ede0c8; color: #776e65; }
+.cell-8 { background-color: #f2b179; color: white; }
+.cell-16 { background-color: #f59563; color: white; }
+.cell-32 { background-color: #f67c5f; color: white; }
+.cell-64 { background-color: #f65e3b; color: white; }
+.cell-128 { background-color: #edcf72; color: white; font-size: calc(1.2rem + 1.5vw); }
+.cell-256 { background-color: #edcc61; color: white; font-size: calc(1.2rem + 1.5vw); }
+.cell-512 { background-color: #edc850; color: white; font-size: calc(1.2rem + 1.5vw); }
+.cell-1024 { background-color: #edc53f; color: white; font-size: calc(1rem + 1.5vw); }
+.cell-2048 { background-color: #edc22e; color: white; font-size: calc(1rem + 1.5vw); }
+.cell-4096 { background-color: #977811; color: white; font-size: calc(1rem + 1.5vw); }
+
+/* 游戏规则说明 */
+.game-rules {
+  background-color: rgba(185, 173, 161, 0.2);
+  padding: 15px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: #776e65;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+/* 游戏结束弹窗 */
+.game-over {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(238, 228, 218, 0.85);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border-radius: 6px;
+  z-index: 10;
+}
+.game-over h2 {
+  font-size: 2.5rem;
+  color: #776e65;
+  margin-bottom: 20px;
+}
+
+/* 响应式适配 */
+@media (max-width: 768px) {
+  .game-board {
+    gap: 8px;
+    padding: 8px;
+  }
+  .row { gap: 8px; }
+  .cell { height: calc(23vw - 25px); }
+
+  .cell {
+    font-size: calc(1.2rem + 1.5vw);
+  }
+}
+
+@media (max-width: 480px) {
+  .game-info {
+    flex-direction: column;
+  }
+  .ai-controls {
+    flex-direction: column;
     align-items: center;
-    gap: 10px;
-    font-size: 0.9em;
-    color: #776e65;
+  }
+  .cell {
+    font-size: calc(1rem + 1.5vw);
+  }
+  .row { gap: 6px; }
+  .cell { 
+    height: calc(21vw - 20px);
+    font-size: calc(1rem + 1.5vw);
+  }
 }
 </style>
