@@ -63,16 +63,6 @@ python main.py
 
 ---
 
-## 🖼️ Screenshots
-
-*You can add screenshots here:*
-
-* Game board with tiles
-* Restart/Continue button hover effects
-* Game Over or Victory screen
-
----
-
 ## 📄 License
 
 MIT License
