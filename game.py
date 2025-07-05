@@ -37,9 +37,11 @@ class Game2048:
         self.continue_img = self.load_image("assets/continue.svg")
 
     def load_image(self, path):
-        if os.path.exists(path):
+        if os.path.exists(path) and path.lower().endswith((".png", ".jpg", ".bmp")):
             return pygame.transform.scale(pygame.image.load(path), (40, 40))
-        return None
+        else:
+            print(f"[Warning] Image not found or unsupported format: {path}")
+            return None
 
     def add_new_tile(self):
         empty = [
@@ -132,26 +134,24 @@ class Game2048:
             hovered = rect.collidepoint(mouse_pos)
             color = hover_color if hovered else base_color
             pygame.draw.rect(self.screen, color, rect, border_radius=6)
-            if img:
-                self.screen.blit(img, img.get_rect(center=rect.center))
-            else:
-                txt = self.small_font.render(label, True, (255, 255, 255))
-                self.screen.blit(txt, txt.get_rect(center=rect.center))
+
+            txt = self.small_font.render(label, True, (255, 255, 255))
+            self.screen.blit(txt, txt.get_rect(center=rect.center))
 
         draw_btn(
             self.restart_rect,
             "Restart",
             self.restart_img,
-            (100, 120, 255),
-            (255, 100, 100),
+            hover_color=(240, 120, 120),
+            base_color=(220, 100, 100),
         )
         if self.won:
             draw_btn(
                 self.continue_rect,
                 "Continue",
                 self.continue_img,
-                (120, 255, 120),
-                (100, 200, 100),
+                hover_color=(120, 200, 120),
+                base_color=(100, 180, 100),
             )
 
     def show_overlay(self, title, score_text, show_continue=False):
