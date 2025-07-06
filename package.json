@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "gh-pages -d dist"
   },
+  "homepage": "https://yushanwang9801.github.io/ai-2048/",
   "dependencies": {
     "gh-pages": "^6.3.0",
     "vue": "^3.5.17"
